@@ -369,6 +369,8 @@ class Simulation:
     self.forward_graph = None
     self.reset_graph = None
     self.sense_graph = None
+    # Constants graphs also hold model/data pointers and must be invalidated.
+    self._constants_graphs: dict[RecomputeLevel, wp.Graph] = {}
     if self.use_cuda_graph:
       with _suspend_gc(), wp.ScopedDevice(self.wp_device):
         with wp.ScopedCapture() as capture:
@@ -487,7 +489,20 @@ class Simulation:
     """
     fn = getattr(mjwarp, level.name)
     with wp.ScopedDevice(self.wp_device):
-      fn(self._wp_model, self._wp_data)
+      if not self.use_cuda_graph:
+        fn(self._wp_model, self._wp_data)
+        return
+      graph = self._constants_graphs.get(level)
+      if graph is None:
+        # Execute once to initialize kernels and temporary allocations. Capture
+        # records work without executing it; this call's result is already ready.
+        fn(self._wp_model, self._wp_data)
+        with _suspend_gc(), wp.ScopedCapture() as capture:
+          fn(self._wp_model, self._wp_data)
+        assert capture.graph is not None
+        self._constants_graphs[level] = capture.graph
+      else:
+        wp.capture_launch(graph)
 
   def forward(self) -> None:
     with wp.ScopedDevice(self.wp_device):

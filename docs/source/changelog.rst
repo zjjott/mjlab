@@ -21,6 +21,9 @@ Added
 Changed
 ^^^^^^^
 
+- Cache CUDA graphs for derived model constant recomputation after domain
+  randomization, and invalidate them when simulation graphs are rebuilt.
+
 - Heightfield terrains now lay hfield rows along y and columns along x, as MuJoCo
   expects. Non-square sub-terrains are no longer stretched with flat patches off the
   terrain; square ones are mirrored across x=y for a given seed.
